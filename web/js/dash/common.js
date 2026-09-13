@@ -14,6 +14,7 @@ export const FONTS = {
   avenir: '"Avenir Next", Avenir, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
   avenirCond: '"Avenir Next Condensed", "DIN Condensed", "Bahnschrift SemiCondensed", "Arial Narrow", "Roboto Condensed", sans-serif',
   mono: '"SF Mono", ui-monospace, Menlo, Consolas, "Roboto Mono", monospace',
+  thin: '"Avenir Next", "Helvetica Neue", "SF Pro Display", system-ui, "Segoe UI", Roboto, sans-serif',
 };
 
 export const font = (px, family, weight = 700, style = '') => `${style} ${weight} ${px}px ${family}`;
@@ -65,6 +66,109 @@ export function text(ctx, str, x, y, fnt, color, align = 'center', baseline = 'm
   ctx.textAlign = align;
   ctx.textBaseline = baseline;
   ctx.fillText(str, x, y);
+}
+
+// Physical needle path: a tail behind the pivot, widest at the pivot, tapering
+// to the tip. Lengths and widths are in virtual units; the caller fills.
+export function needlePath(ctx, cx, cy, a, tail, tip, wTail, wHub, wTip) {
+  const c = Math.cos(a), s = Math.sin(a);
+  ctx.beginPath();
+  ctx.moveTo(cx - c * tail - s * wTail, cy - s * tail + c * wTail);
+  ctx.lineTo(cx - s * wHub, cy + c * wHub);
+  ctx.lineTo(cx + c * tip - s * wTip, cy + s * tip + c * wTip);
+  ctx.lineTo(cx + c * tip + s * wTip, cy + s * tip - c * wTip);
+  ctx.lineTo(cx + s * wHub, cy - c * wHub);
+  ctx.lineTo(cx - c * tail + s * wTail, cy - s * tail - c * wTail);
+  ctx.closePath();
+}
+
+// G-meter dot offset (in g) for the force the driver feels: a right turn
+// pushes the dot left, braking pushes it up. Clamped to maxG; reuses one array.
+const gOut = [0, 0];
+export function gFelt(gLat, gLon, maxG) {
+  let x = -gLat, y = gLon;
+  const m = Math.hypot(x, y);
+  if (m > maxG) {
+    x *= maxG / m;
+    y *= maxG / m;
+  }
+  gOut[0] = x;
+  gOut[1] = y;
+  return gOut;
+}
+
+// Seven-segment display. Segments: a top, b upper right, c lower right,
+// d bottom, e lower left, f upper left, g middle.
+const SEGMENTS = {
+  0: 'abcdef', 1: 'bc', 2: 'abdeg', 3: 'abcdg', 4: 'bcfg', 5: 'acdfg', 6: 'acdefg', 7: 'abc', 8: 'abcdefg', 9: 'abcdfg',
+  '-': 'g', r: 'eg', R: 'eg', n: 'ceg', N: 'ceg',
+};
+const isPunct = (ch) => ch === ':' || ch === '.';
+
+function hSeg(ctx, x0, x1, y, t, cy, k) {
+  const h = t / 2;
+  ctx.moveTo(x0 + (cy - y) * k, y);
+  ctx.lineTo(x0 + h + (cy - y + h) * k, y - h);
+  ctx.lineTo(x1 - h + (cy - y + h) * k, y - h);
+  ctx.lineTo(x1 + (cy - y) * k, y);
+  ctx.lineTo(x1 - h + (cy - y - h) * k, y + h);
+  ctx.lineTo(x0 + h + (cy - y - h) * k, y + h);
+  ctx.closePath();
+}
+
+function vSeg(ctx, x, y0, y1, t, cy, k) {
+  const h = t / 2;
+  ctx.moveTo(x + (cy - y0) * k, y0);
+  ctx.lineTo(x + h + (cy - y0 - h) * k, y0 + h);
+  ctx.lineTo(x + h + (cy - y1 + h) * k, y1 - h);
+  ctx.lineTo(x + (cy - y1) * k, y1);
+  ctx.lineTo(x - h + (cy - y1 + h) * k, y1 - h);
+  ctx.lineTo(x - h + (cy - y0 - h) * k, y0 + h);
+  ctx.closePath();
+}
+
+// Draws str in slanted seven-segment digits h tall, vertically centred on cy,
+// with its right edge at x (align 'right'), left edge ('left') or centre.
+// Supports 0-9, '-', r/R, n/N, ':' and '.'; anything else is a blank cell.
+// Draw '8's in a dim colour first for the unlit segments.
+export function sevenSeg(ctx, str, x, cy, h, color, align = 'right') {
+  const w = h * 0.52, sp = h * 0.2, t = h * 0.13, gp = t * 0.22, k = 0.08, pw = h * 0.28;
+  let total = -sp;
+  for (let i = 0; i < str.length; i++) total += isPunct(str[i]) ? pw : w + sp;
+  let left = align === 'right' ? x - total : align === 'center' ? x - total / 2 : x;
+  const top = cy - h / 2;
+  const yT = top + t / 2, yB = top + h - t / 2;
+  ctx.beginPath();
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (isPunct(ch)) {
+      const px = left + (pw - t) / 2 - sp * 0.5;
+      if (ch === ':') {
+        ctx.rect(px + h * 0.22 * k, cy - h * 0.22 - t / 2, t, t);
+        ctx.rect(px - h * 0.22 * k, cy + h * 0.22 - t / 2, t, t);
+      } else {
+        ctx.rect(px - (h / 2 - t / 2) * k, yB - t / 2, t, t);
+      }
+      left += pw;
+      continue;
+    }
+    const seg = SEGMENTS[ch] || '';
+    const xL = left + t / 2, xR = left + w - t / 2;
+    for (let j = 0; j < seg.length; j++) {
+      switch (seg[j]) {
+        case 'a': hSeg(ctx, xL + gp, xR - gp, yT, t, cy, k); break;
+        case 'b': vSeg(ctx, xR, yT + gp, cy - gp, t, cy, k); break;
+        case 'c': vSeg(ctx, xR, cy + gp, yB - gp, t, cy, k); break;
+        case 'd': hSeg(ctx, xL + gp, xR - gp, yB, t, cy, k); break;
+        case 'e': vSeg(ctx, xL, cy + gp, yB - gp, t, cy, k); break;
+        case 'f': vSeg(ctx, xL, yT + gp, cy - gp, t, cy, k); break;
+        case 'g': hSeg(ctx, xL + gp, xR - gp, cy, t, cy, k); break;
+      }
+    }
+    left += w + sp;
+  }
+  ctx.fillStyle = color;
+  ctx.fill();
 }
 
 export function hbar(ctx, x, y, w, h, frac, color) {

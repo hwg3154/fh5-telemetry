@@ -1,7 +1,7 @@
 // Modern Ford (S650 Mustang digital cluster inspired): a wide arced rpm tape
 // over huge italic speed digits, with glassy cards along the bottom.
 
-import { FONTS, font, roundRect, tickPath, text, blink, glowSprite, drawSprite, clamp, DEG, memo } from './common.js';
+import { FONTS, font, roundRect, tickPath, text, blink, glowSprite, drawSprite, clamp, DEG, TAU, memo, gFelt } from './common.js';
 import { lapTime } from '../units.js';
 
 const BLUE = '#1f6fff';
@@ -54,8 +54,10 @@ export default {
     const cw = (W - 2 * m - gap * 4) / 5;
     const cards = [0, 1, 2, 3, 4].map((i) => ({ x: m + i * (cw + gap), y: cardY, w: cw, h: cardH }));
 
-    const gear = { x: cx + Math.min(290, W * 0.19), y: 350, w: 124, h: 150 };
-    return { R, cx, cy, cards, gear, speedY: 450 };
+    const side = Math.min(290, W * 0.19);
+    const gear = { x: cx + side, y: 350, w: 124, h: 150 };
+    const gm = { cx: cx - side - 62, cy: 425, r: 72 }; // G-meter mirrors the gear box
+    return { R, cx, cy, cards, gear, gm, speedY: 450 };
   },
 
   drawStatic(ctx, L, v) {
@@ -133,6 +135,29 @@ export default {
     ctx.strokeStyle = BLUE;
     ctx.stroke();
     text(ctx, 'GEAR', g.x + g.w / 2, g.y - 18, font(16, FONTS.avenir, 600), '#6f8fc2');
+
+    const gm = L.gm;
+    const gk = (gm.r * 0.86) / 1.5;
+    ctx.beginPath();
+    ctx.arc(gm.cx, gm.cy, gm.r, 0, TAU);
+    ctx.fillStyle = 'rgba(10,30,70,0.55)';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = BLUE;
+    ctx.stroke();
+    ctx.beginPath();
+    for (const ring of [0.5, 1]) {
+      ctx.moveTo(gm.cx + ring * gk, gm.cy);
+      ctx.arc(gm.cx, gm.cy, ring * gk, 0, TAU);
+    }
+    ctx.moveTo(gm.cx - gm.r * 0.86, gm.cy);
+    ctx.lineTo(gm.cx + gm.r * 0.86, gm.cy);
+    ctx.moveTo(gm.cx, gm.cy - gm.r * 0.86);
+    ctx.lineTo(gm.cx, gm.cy + gm.r * 0.86);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(143,179,255,0.28)';
+    ctx.stroke();
+    text(ctx, 'G-FORCE', gm.cx, g.y - 18, font(16, FONTS.avenir, 600), '#6f8fc2');
 
     const [boost, power, inputs, lap, fuel] = L.cards;
     card(ctx, boost, 'BOOST');
@@ -216,6 +241,12 @@ export default {
 
     const g = L.gear;
     text(ctx, v.gear, g.x + g.w / 2, g.y + g.h / 2 + 6, font(112, FONTS.avenir, 700, 'italic'), v.gear === 'R' ? '#ff6a5a' : '#fff');
+
+    const gm = L.gm;
+    const gk = (gm.r * 0.86) / 1.5;
+    const gd = gFelt(v.gLat, v.gLon, 1.5);
+    drawSprite(ctx, glowSprite(CYAN, 7), gm.cx + gd[0] * gk, gm.cy + gd[1] * gk, 7);
+    text(ctx, `${Math.hypot(v.gLat, v.gLon).toFixed(2)} g`, gm.cx, gm.cy + gm.r + 24, font(22, FONTS.avenir, 600, 'italic'), '#dfeaff');
 
     const [boost, power, inputs, lap, fuel] = L.cards;
     const barW = (c) => c.w - 36;

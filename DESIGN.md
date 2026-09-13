@@ -24,7 +24,7 @@ It must look good on a laptop, an iPad, and an iPhone.
 | Data retention | **Live only.** No logging, recording, or database. |
 | Host | **x86-64 Ubuntu server VM**, running Docker. It shares the box with about 12 other services, so the app **must stay lightweight** in CPU, RAM, and image size. |
 | Car → style mapping | **No lookup table.** A dropdown lets you pick the style manually. |
-| Dashboard styles | **Modern Porsche**, **Race car** (Hoonicorn-style), **Modern Ford**, **JDM Analog** |
+| Dashboard styles | **Porsche GT3**, **Porsche Taycan**, **Porsche Boxster (2009)**, **Race car** (Hoonicorn-style), **Modern Ford**, **JDM Analog** |
 | Remote access / HTTPS | **Cloudflare Tunnel**, which provides HTTPS. |
 | Auth | **No app login.** **Cloudflare Access** secures it. |
 | Orientation | **Landscape only** for the dashboard. |
@@ -265,8 +265,8 @@ An unrecognized size shows a banner saying "Unrecognized packet: N bytes".
 ```js
 export default {
   id: 'porsche',
-  name: 'Modern Porsche',
-  bg: '#000',
+  name: 'Porsche GT3',
+  bg: '#040506',
   layout(W, H) { /* returns geometry L */ },
   drawStatic(ctx, L, v) { /* cached: faces, ticks, labels */ },
   drawDynamic(ctx, L, v) { /* every frame: needles, digits, bars */ },
@@ -281,7 +281,8 @@ export default {
 - throttle, brake, clutch, handbrake
 - boost and its unit
 - fuel
-- power and torque
+- power and torque; a power-meter fraction of the highest power seen for the current car (at least 75 kW)
+- distance traveled
 - tire temps ×4 and combined slip ×4
 - current, last, and best lap; lap number; position
 - lateral and longitudinal g
@@ -299,30 +300,38 @@ export default {
 - **Redline starts** at `rpmMax − max(500, 10% of rpmMax)`, rounded to 250.
 - **Shift lights** start at 72% of rpmMax and are all lit at 96%. Above 96% they flash as the limiter warning.
 - **Speedometer range** (analog styles): 0–200 mph or 0–360 km/h. The needle pins at the top.
+- **What every style shows:**
+  - **Speed:** digitally on every style. Styles with a speedometer needle also show the digital value, except the classic analog ones (JDM). The Boxster's digital speed is its authentic seven-segment display.
+  - **Tachometer:** always; centered on the Porsche styles.
+  - **Boost:** wherever it fits.
+  - **G-meter:** on the modern clusters (GT3, Taycan, Ford); the Race car shows lateral and longitudinal g as numbers.
+  - **Detailed per-tire data** (temperatures) only on the technical Race car cluster.
+- **G-meter dot** shows the force the driver feels: a right turn moves it left, braking moves it up, acceleration moves it down. (The telemetry screen's G-G diagram plots raw acceleration instead, with ACCEL at the top.)
+- **Shared helpers** in `common.js`: `needlePath` (physical needle with a tail, widest at the pivot), `gFelt` (G-meter dot offset), `sevenSeg` (slanted seven-segment digits drawn as polygons, so no LCD font is needed).
 
-### 6.3 Modern Porsche (992 / Taycan inspired)
+### 6.3 Porsche GT3 (992 GT3 / GT3 RS inspired)
 
-- **Background:** black with a subtle vignette.
-- **Center tachometer:**
-  - Radius `min(390, 0.26W, 0.46H)`, sweeping 270° from 135° to 405° with the gap at the bottom.
-  - Brushed-silver bezel ring.
-  - White major and minor ticks with large white numerals.
-  - Guards-red (`#d5001c`) redline band.
-  - **Floating needle:** a tapered red-orange (`#ff3219`) segment from 0.52R to the outer edge, with a glow. There is no center hub, so the digits stay readable.
-  - A faint translucent red sweep trails behind the needle.
-- **Inside the tach:**
-  - "RPM ×1000" label
-  - Big digital speed with its unit
-  - Gear in a rounded box
-- **Below the tach:** thin throttle (white) and brake (red) bars, plus a class · PI · drivetrain line.
-- **Left side panel** (dark rounded "screen"):
-  - Boost mini arc gauge (240°) with the digital value
-  - Power and torque readouts
-  - Fuel bar that turns amber when low
-- **Right side panel:**
-  - Sport Chrono–style **G-force circle** with rings at 0.5, 1, and 1.5 g and a glowing dot
-  - Lap block: lap number, current (large), last, best
-- **Limiter:** the outer bezel ring flashes red at about 10 Hz above 96.5% of rpmMax.
+Keeps the style id `porsche`, so saved per-car styles from the earlier Modern Porsche carry over.
+
+- **Background:** near-black `#040506`. Two dark rounded side "screens" flank the tach.
+- **Center tachometer** (physical):
+  - Radius `min(380, 0.25W, 0.46H)`, sweeping 240° from 150° to 390°.
+  - Dark metal housing ring with a drop shadow.
+  - Outer band: fine **yellow** (`#f5c400`) ticks every tenth of a major step, longer ones at the half step, white blocks at majors.
+  - A lighter gray numeral band with bold white numerals; a dark inner face with faint concentric texture.
+  - **Redline:** a red bar at the outer edge plus red diagonal hatching across the tick band.
+  - **Yellow needle** (`#ffd21f`) with a tail and drop shadow, under a silver hub cap (glass layer).
+  - Lower face: a dark window with **digital speed** and unit, and the **gear** in yellow to its right. A faint italic "GT3" above the hub; "1/min × 1000" at the bottom.
+- **Left screen:** round dials with yellow minor ticks, white majors and numerals, yellow needles, and a gray label above each:
+  - **Speedometer** (0–200 mph labeled every 40, or 0–360 km/h every 60), odometer in the bottom gap
+  - **Boost** (−15…30 psi or −1…2 bar) with its digital value
+  - Fuel bar along the bottom, amber when low
+- **Right screen:**
+  - **G-meter** dial: rings at 0.5, 1 and 1.5 g, yellow ring ticks, a glowing yellow dot, total g below
+  - Lap block: lap number and position, current (large), last, best (yellow)
+  - Class · PI · drivetrain along the bottom
+- **Layout:** side column width `W/2 − R − 40`; big dials `r = clamp(0.47 × column, 100, 175)`, small dials 0.72 of that.
+- **Limiter:** the housing ring flashes red at about 10 Hz above 96.5% of rpmMax.
 
 ### 6.4 Race car (Hoonicorn / MoTeC-style digital dash)
 
@@ -349,7 +358,7 @@ export default {
   - Fake the glow with a second, wider stroke at 25% alpha instead of using `shadowBlur`.
   - Segment separator lines are drawn in the cached glass layer.
 - **Numbers and ticks** sit outside the arc.
-- **Center:** huge **italic** speed digits with the unit below. The gear sits to the right in a rounded box with a blue outline.
+- **Center:** huge **italic** speed digits with the unit below. The gear sits to the right in a rounded box with a blue outline; a round **G-meter** (rings at 0.5 and 1 g, cyan dot, total g below) mirrors it on the left.
 - **Bottom band:** 5 glassy cards with blue top borders:
   - BOOST (bar + value)
   - POWER
@@ -384,6 +393,37 @@ export default {
   - 0–200 mph (labels every 20) or 0–360 km/h (labels every 40).
   - An amber **ODO LCD** shows distance traveled.
 - **Glass layer:** a subtle diagonal highlight clipped to each face, drawn above the needles.
+
+### 6.7 Porsche Taycan (electric, flat and minimal)
+
+- **Look:** pure black, flat shapes, no gradients or bezels. Thin system fonts (Avenir Next), white text, gray labels, and sparse color: acid green `#3ee6a8`, regen blue `#3d8bff`, red `#ff3b30`.
+- **Three round pods** in a row, each with a thin outline and a 270° ring (135°→405°) that has a label in the bottom gap:
+  - Center `Rc = min(clamp((W − 116) / 4.9, 220, 350), 0.4H)`, sides 0.725 of that, 28 apart, centered at y=410.
+- **Center pod (tachometer):** the ring fills white up to the redline and red beyond it, with small numerals inside. Inside: the gear in a pill, huge thin **digital speed** with its unit, rpm in the gap.
+- **Left pod (power):**
+  - Ring = **power meter**, from −25% (engine braking, blue) through a zero mark to 100% of the highest power seen for this car (white)
+  - Power value and unit
+  - **Battery** bar from fuel (green, amber below 20%, red below 10%) with a percentage
+  - Boost value in the gap
+- **Right pod (G-meter):** rings at 0.5, 1 and 1.5 g with a flat white dot; the ring fills green with total g (full at 2 g); value in the gap.
+- **Info row** under the pods: class line, lap number and current lap, best lap and position.
+- **Limiter:** the tach ring turns fully red and the pod outline blinks at 6 Hz.
+
+### 6.8 Porsche Boxster (987, 2009)
+
+- **Three overlapping round gauges** in a dark cluster hood. The larger center tach sits in front and casts a shadow; the side gauges tuck 36% of their radius behind it.
+  - `Rc = min(clamp((W − 70) / 4.62, 240, 360), 0.4H)`, sides 0.8Rc, centers `Rc + 0.64Rs` apart, side gauges 0.12Rc lower.
+- **Look:** off-white faces with a shaded rim, thin chrome rings, black numerals and ticks, red redline ink.
+- **Physical needles:** red-orange `#ff3d17`, tapered with a tail, with an offset drop shadow (no blur) and domed black caps in the glass layer. Needles on the side gauges are clipped where the tach covers them.
+- **Seven-segment LCDs** (amber `#ff7a1a` on black, unlit segments faintly visible):
+  - Tach: **gear | speed** and unit, at the bottom of the face
+  - Speedometer: odometer
+  - Right gauge: current lap time (m:ss.t)
+- **Left: speedometer** sweeping 135°→315° (so the scale ends before the tach covers it); 0–200 mph labeled every 25, or 0–360 km/h every 40.
+- **Center: tachometer** sweeping 240° (150°→390°), ticks at quarter, half and full major steps, red band and numerals past the redline, "1/min ×1000". A small red lamp lights above 96% of rpmMax.
+- **Right:** **boost** needle across the top (215°→325°) and a **fuel** sub-dial at lower right (E red, ½, F) on its own pivot.
+- **Glass layer:** a soft diagonal highlight on each face (clipped the same way).
+- **Info strip** under the hood: class line, lap number and best lap.
 
 ---
 
@@ -449,7 +489,9 @@ fh5-telemetry/
 │       ├── dash/
 │       │   ├── index.js   # canvas sizing, view model, static/glass caching, style registry
 │       │   ├── common.js  # drawing helpers, fonts, rpm scale
-│       │   ├── porsche.js
+│       │   ├── porsche.js # GT3
+│       │   ├── taycan.js
+│       │   ├── boxster.js
 │       │   ├── race.js
 │       │   ├── ford.js
 │       │   └── jdm.js

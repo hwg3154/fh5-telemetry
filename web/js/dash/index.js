@@ -2,6 +2,8 @@
 // cached static/glass layers and the style registry.
 
 import porsche from './porsche.js';
+import taycan from './taycan.js';
+import boxster from './boxster.js';
 import race from './race.js';
 import ford from './ford.js';
 import jdm from './jdm.js';
@@ -9,7 +11,7 @@ import { rpmScale, shiftFraction, clamp } from './common.js';
 import * as U from '../units.js';
 import { gearLabel, className, drivetrainName } from '../forza.js';
 
-export const STYLES = [porsche, race, ford, jdm];
+export const STYLES = [porsche, taycan, boxster, race, ford, jdm];
 export const styleById = (id) => STYLES.find((s) => s.id === id) || STYLES[0];
 
 const VH = 900;
@@ -35,6 +37,7 @@ function createView() {
     boost: 0, boostNeedle: 0, boostFrac: 0, boostMin: -15, boostMax: 30, boostUnit: 'psi',
     fuel: 0, fuelNeedle: 0, fuelFrac: 0,
     power: 0, powerUnit: 'hp', torque: 0, torqueUnit: 'lb-ft',
+    car: -1, powerW: 0, powerPeakW: 0, powerFrac: 0,
     tireTemp: [0, 0, 0, 0], tireTempF: [0, 0, 0, 0], tempUnit: '°F',
     slip: [0, 0, 0, 0],
     lap: 0, curLap: 0, lastLap: 0, bestLap: 0, position: 0,
@@ -90,6 +93,17 @@ function updateView(v, state, dt, t) {
   v.torqueUnit = U.torqueUnit(m);
   v.power = live ? U.power(tel.power, m) : 0;
   v.torque = live ? U.torque(tel.torque, m) : 0;
+
+  // Power meter: fraction of the highest power seen for the current car
+  // (at least 75 kW, so a gentle cruise doesn't read as full power).
+  if (live && tel.carOrdinal !== v.car) {
+    v.car = tel.carOrdinal;
+    v.powerPeakW = 0;
+  }
+  const watts = live ? tel.power : 0;
+  if (watts > v.powerPeakW) v.powerPeakW = watts;
+  v.powerW += (watts - v.powerW) * ease(12);
+  v.powerFrac = v.powerW / Math.max(v.powerPeakW, 75000);
 
   v.tempUnit = U.tempUnit(m);
   for (let i = 0; i < 4; i++) {

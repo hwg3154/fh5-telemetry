@@ -2,7 +2,7 @@
 
 A lightweight self-hosted web app for **Forza Horizon 5 "Data Out"** telemetry:
 
-- **Dash:** a canvas gauge cluster in four styles (Modern Porsche, Race car, Modern Ford, JDM Analog), built for an iPad propped under the monitor.
+- **Dash:** a canvas gauge cluster in six styles (Porsche GT3, Porsche Taycan, Porsche Boxster (2009), Race car, Modern Ford, JDM Analog), built for an iPad propped under the monitor.
 - **Telemetry:** a dense data screen with engine, inputs, laps, per-tire slip, temps and suspension, G-G diagram, traces and a position trail.
 
 A single Go binary receives the UDP packets and relays them unchanged to browsers over a WebSocket. The client is plain ES modules with no build step. The image is about 11 MB and uses about 10 MB of RAM. See [DESIGN.md](DESIGN.md) for the full design.
