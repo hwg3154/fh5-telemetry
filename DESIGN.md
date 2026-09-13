@@ -1,7 +1,7 @@
 # FH5 Telemetry Dashboard: Design Doc
 
-**Status:** Design agreed, no code written yet. The stack is proposed but not confirmed (see [Open questions](#10-open-questions)).
-**Last updated:** 2026-09-12
+**Status:** Implemented (v1). Stack confirmed as Go + vanilla JS; the open questions were answered on 2026-09-13 (see [Decisions on the open questions](#10-decisions-on-the-open-questions)).
+**Last updated:** 2026-09-13
 
 ---
 
@@ -37,7 +37,7 @@ It must look good on a laptop, an iPad, and an iPhone.
 
 ## 3. Proposed architecture
 
-> **Needs confirmation.** The first planning pass suggested Node/TypeScript + React. Because of the "keep it lightweight" requirement, this doc proposes **Go server + vanilla JS client, no build step** instead.
+> **Confirmed:** **Go server + vanilla JS client, no build step** (chosen over the earlier Node/TypeScript + React suggestion because of the "keep it lightweight" requirement).
 
 ```
  Gaming PC (FH5)                    Ubuntu VM (Docker)                        Clients
@@ -71,7 +71,9 @@ It must look good on a laptop, an iPad, and an iPhone.
 - **Health checks:** a `GET /healthz` endpoint, plus a `healthcheck` subcommand for Docker's `HEALTHCHECK`. The scratch image has no curl, so the binary checks itself.
 - **WebSocket library:** `github.com/coder/websocket`, with compression disabled.
   - Keep the default origin check. cloudflared keeps the original Host header, so the check passes through the tunnel.
-- **Config:** env vars `HTTP_ADDR` (default `:8080`) and `UDP_ADDR` (default `:5300`).
+- **Config:** env vars `HTTP_ADDR` (default `:8080`), `UDP_ADDR` (default `:5300`), `DATA_DIR` (default `data`, `/data` in the image) and `FORWARD_ADDR` (optional).
+- **UDP forwarding:** if `FORWARD_ADDR` holds a comma-separated `host:port` list, every raw packet is re-sent there as well (for SimHub, a motion rig, etc.). Off by default; hostnames resolve once at startup.
+- **Per-car styles:** `GET /api/styles` and `PUT /api/styles/{car}` (body `{"style":"jdm"}`, empty style deletes). The map is kept in memory, written atomically to `DATA_DIR/car-styles.json`, and pushed to every client as a `{"type":"styles","styles":{...}}` text frame on connect and on every change.
 - **Shutdown:** graceful on SIGTERM.
 - **Bandwidth:** 324 B × 60/s ≈ **20 KB/s per client**.
 
@@ -94,7 +96,7 @@ The gauges are drawn on a canvas every frame, so a framework adds nothing but a 
     - Needles move with exponential smoothing.
     - The needles sweep once when the page loads, like a real cluster's self-test.
   - **Telemetry:** DOM text updates at about 15 Hz and only touches values that changed. Canvas charts update at about 30 Hz.
-- **Settings (localStorage, wrapped in try/catch):** units, current style, style-per-car map, last screen.
+- **Settings (localStorage, wrapped in try/catch):** units, current style, last screen. The style-per-car map lives on the server (§3.1).
 
 ### 3.3 Dashboard scaling
 
@@ -223,11 +225,11 @@ An unrecognized size shows a banner saying "Unrecognized packet: N bytes".
     - Current car number, e.g. "Car #3000"
   - On the dashboard it auto-hides after 4 s. Tap the dash to show it again.
   - On the telemetry screen it stays pinned at the top.
-- **Per-car style memory (proposed, cheap):**
+- **Per-car style memory (synced on the server):**
   - When you pick a style, it is saved against the current CarOrdinal.
   - When that car shows up again, its saved style is selected automatically.
   - This gives automatic switching by car without a lookup table.
-  - It is stored per device in localStorage.
+  - It is stored on the server (`car-styles.json` on a Docker volume) and shared by every device.
 - **Status banner** (highest priority first):
   1. WebSocket down → "Disconnected from server, reconnecting…"
   2. No packets for more than 2 s → "No telemetry: waiting for Forza Data Out on UDP 5300"
@@ -337,7 +339,7 @@ export default {
 - **Background:** a deep blue radial gradient (`#0b2140` fading to `#02050b`) with a faint blue horizon glow line.
 - **Tachometer "tape":**
   - A wide, shallow arc across the top, 54 px thick, sweeping from 198° to 342°.
-  - Radius `min(640, (W/2 − 70) / 0.951)`, with its center at `110 + R` so the top of the arc sits near y=110.
+  - Radius `min(640, (W/2 − 125) / 0.951)`, with its center at `110 + R` so the top of the arc sits near y=110. (The original `W/2 − 70` pushed the end numerals off an iPad screen.)
   - Dark segment background. Segments past the redline have a dark red tint.
 - **Tape fill** (per frame, one stroke):
   - Stroke an arc up to the current rpm, using a horizontal gradient: Ford blue `#1f6fff` → cyan `#39c6ff` → orange `#ff8a00` → red.
@@ -422,15 +424,18 @@ export default {
 fh5-telemetry/
 ├── main.go            # config, HTTP server, embed, healthcheck, shutdown
 ├── hub.go             # clients, broadcast, status ticker, /ws handler
-├── udp.go             # UDP listener → hub
+├── udp.go             # UDP listener → hub, optional forwarder
+├── styles.go          # per-car style map, persisted to DATA_DIR
 ├── go.mod / go.sum    # one dependency: github.com/coder/websocket
 ├── web/
 │   ├── index.html
 │   ├── manifest.webmanifest
 │   ├── icon.svg
+│   ├── apple-touch-icon.png
 │   ├── css/app.css
 │   └── js/
-│       ├── main.js        # boot, routing, controls, banner, wake lock, settings
+│       ├── main.js        # boot, routing, controls, banner, wake lock
+│       ├── settings.js    # localStorage settings, per-car style API
 │       ├── socket.js      # WebSocket + reconnect + watchdog
 │       ├── forza.js       # packet layouts + parser
 │       ├── units.js       # conversions, formatting
@@ -482,8 +487,12 @@ services:
     container_name: fh5-telemetry
     restart: unless-stopped
     ports:
-      - "${HTTP_PORT:-8080}:8080"   # web UI (point cloudflared here)
+      - "${HTTP_PORT:-1234}:8080"   # web UI (point cloudflared here)
       - "${UDP_PORT:-5300}:5300/udp" # Forza Data Out
+    environment:
+      FORWARD_ADDR: ${FORWARD_ADDR:-}
+    volumes:
+      - fh5-data:/data              # car-styles.json
     read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -500,7 +509,7 @@ services:
   - Give the VM a DHCP reservation or a static IP.
   - If ufw is enabled, open UDP 5300.
   - If the VM uses NAT networking in the hypervisor, forward UDP 5300 to it. Bridged networking is simpler.
-- **Tunnel:** point the Cloudflare Tunnel's public hostname at `http://<host>:8080`, or at `http://fh5-telemetry:8080` if cloudflared runs on the same Docker network. Tunnels carry WebSockets without extra setup.
+- **Tunnel:** point the Cloudflare Tunnel's public hostname at `http://127.0.0.1:1234` (cloudflared on the host network, as deployed), `http://<host>:1234`, or `http://fh5-telemetry:8080` if cloudflared runs on the same Docker network. Tunnels carry WebSockets without extra setup.
 - **Access:** put a Cloudflare Access policy on the hostname. The WebSocket is on the same origin, so the Access cookie covers it.
 - **Latency:**
   - Through the tunnel, the iPad's data goes out to the Cloudflare edge and back. That adds some latency that hasn't been measured yet.
@@ -543,13 +552,15 @@ services:
 
 ---
 
-## 10. Open questions
+## 10. Decisions on the open questions
 
-1. **Confirm the stack:** Go server + vanilla JS (proposed, lightest), or Node/TypeScript + React (the earlier suggestion)?
-2. **Does anything else need FH5's data?** SimHub, a motion rig, bass shakers? FH5 sends to only one destination, so the server would need to re-forward the raw UDP. It's cheap to add. *(Asked earlier, not yet answered.)*
-3. **Per-car style memory:** per device in localStorage (proposed), or synced on the server (needs a small volume)?
-4. **Units:** one Imperial/Metric toggle (proposed), or separate settings per unit?
-5. **Speedometer range** for the analog styles: fixed 200 mph / 360 km/h (proposed), or something else?
+Answered 2026-09-13:
+
+1. **Stack:** Go server + vanilla JS.
+2. **Re-forwarding FH5's data:** optional, off by default, via `FORWARD_ADDR`.
+3. **Per-car style memory:** synced on the server (small Docker volume).
+4. **Units:** one Imperial/Metric toggle, as already decided in §2.
+5. **Speedometer range** for the analog styles: fixed 200 mph / 360 km/h.
 
 ## 11. Future work
 

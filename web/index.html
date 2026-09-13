@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FH5 Dash">
+  <title>FH5 Telemetry</title>
+  <link rel="manifest" href="manifest.webmanifest" crossorigin="use-credentials">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body data-route="dash">
+  <div id="safe" aria-hidden="true"></div>
+
+  <header id="bar">
+    <nav class="tabs">
+      <a href="#dash" data-route="dash">Dash</a>
+      <a href="#telemetry" data-route="telemetry">Telemetry</a>
+    </nav>
+    <select id="style-select" aria-label="Dash style"></select>
+    <button id="units-btn" type="button">Imperial</button>
+    <button id="fs-btn" type="button" hidden>Fullscreen</button>
+    <span class="spacer"></span>
+    <span id="car-label" class="car">No car</span>
+    <span id="conn-dot" class="dot" title="Connection"></span>
+  </header>
+
+  <div id="banner" role="status" hidden></div>
+
+  <section id="dash">
+    <canvas id="dash-canvas"></canvas>
+  </section>
+
+  <section id="telemetry" hidden>
+    <div id="panels"></div>
+  </section>
+
+  <div id="rotate">
+    <svg viewBox="0 0 64 64" width="72" height="72" aria-hidden="true"><rect x="20" y="8" width="24" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="3"/><path d="M8 40a24 24 0 0 0 20 16" fill="none" stroke="currentColor" stroke-width="3"/><path d="M26 50l2 6-6 2" fill="none" stroke="currentColor" stroke-width="3"/></svg>
+    <p>Rotate to landscape</p>
+    <a href="#telemetry">Open Telemetry instead</a>
+  </div>
+</body>
+</html>
