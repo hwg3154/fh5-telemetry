@@ -32,10 +32,22 @@ function label(ctx, str, x, y, align = 'left', baseline = 'middle', color = LABE
   ctx.fillText(str, x, y);
 }
 
-// series: [{ ring, color, min, max, width }]. The newest sample is at the right
-// edge and the full ring capacity spans the width, so the time axis is fixed.
+let xs = new Float32Array(0);
+
+// Index of the oldest sample no more than `ms` older than the newest one.
+function windowStart(time, ms) {
+  const n = time.len;
+  const newest = time.at(n - 1);
+  let i = n - 1;
+  while (i > 0 && newest - time.at(i - 1) <= ms) i--;
+  return i;
+}
+
+// time: the history's timestamp ring. series: [{ ring, color, min, max, width }],
+// sharing time's indices. Points are placed by timestamp with the newest sample
+// at the right edge, so the axis spans `seconds` whatever the packet rate.
 // guides: [{ value, label, color }] in the first series' units.
-export function drawLines(canvas, series, { guides = [], topLabel = '', bottomLabel = '', seconds = 20 } = {}) {
+export function drawLines(canvas, time, series, { guides = [], topLabel = '', bottomLabel = '', seconds = 20 } = {}) {
   const f = fit(canvas);
   if (!f) return;
   const { ctx, w, h } = f;
@@ -73,21 +85,25 @@ export function drawLines(canvas, series, { guides = [], topLabel = '', bottomLa
     if (g.label) label(ctx, g.label, x0 - 4, y, 'right');
   }
 
+  const n = time.len;
+  if (n < 2) return;
+  const ms = seconds * 1000;
+  const first = windowStart(time, ms);
+  const newest = time.at(n - 1);
+  if (xs.length < time.cap) xs = new Float32Array(time.cap);
+  for (let i = first; i < n; i++) xs[i] = x1 - ((newest - time.at(i)) / ms) * pw;
+
   ctx.lineJoin = 'round';
   for (const s of series) {
     const r = s.ring;
-    const n = r.len;
-    if (n < 2) continue;
-    const step = Math.max(1, Math.floor(r.cap / pw));
     const span = s.max - s.min;
     ctx.beginPath();
-    for (let i = n - 1, first = true; i >= 0; i -= step, first = false) {
-      const x = x1 - ((n - 1 - i) / (r.cap - 1)) * pw;
+    for (let i = first; i < n; i++) {
       let k = (r.at(i) - s.min) / span;
       k = k < -0.02 ? -0.02 : k > 1.02 ? 1.02 : k;
       const y = y1 - k * ph;
-      if (first) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+      if (i === first) ctx.moveTo(xs[i], y);
+      else ctx.lineTo(xs[i], y);
     }
     ctx.lineWidth = s.width || 1.5;
     ctx.strokeStyle = s.color;
@@ -127,15 +143,16 @@ export function drawGG(canvas, hist, maxG = 2) {
   label(ctx, 'R', w - 4, cy - 8, 'right');
 
   const lat = hist.gLat, lon = hist.gLon;
-  const n = lat.len;
-  const trail = Math.min(n, 120);
-  if (trail < 2) return;
+  const n = hist.time.len;
+  if (n < 2) return;
+  const first = windowStart(hist.time, 2000);
+  const trail = n - first;
   const chunks = 6;
   const per = Math.ceil(trail / chunks);
   ctx.lineWidth = 2;
   ctx.lineJoin = 'round';
   for (let c = 0; c < chunks; c++) {
-    const start = n - trail + c * per;
+    const start = first + c * per;
     const end = Math.min(n - 1, start + per);
     if (start >= end) continue;
     ctx.beginPath();

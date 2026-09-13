@@ -41,7 +41,7 @@ It must look good on a laptop, an iPad, and an iPhone.
 
 ```
  Gaming PC (FH5)                    Ubuntu VM (Docker)                        Clients
-┌──────────────┐  UDP 60 Hz     ┌─────────────────────────────┐   WebSocket   ┌──────────────┐
+┌──────────────┐  UDP per frame ┌─────────────────────────────┐   WebSocket   ┌──────────────┐
 │ Data Out     │  324-byte pkts │  fh5-telemetry (Go binary)  │   binary      │ iPad (dash)  │
 │ → VM_IP:5300 │ ─────────────► │  UDP :5300 → relay → /ws    │ ────────────► │ Laptop       │
 └──────────────┘   (LAN only)   │  HTTP :8080 static files    │  (LAN, or via │ iPhone       │
@@ -75,7 +75,8 @@ It must look good on a laptop, an iPad, and an iPhone.
 - **UDP forwarding:** if `FORWARD_ADDR` holds a comma-separated `host:port` list, every raw packet is re-sent there as well (for SimHub, a motion rig, etc.). Off by default; hostnames resolve once at startup.
 - **Per-car styles:** `GET /api/styles` and `PUT /api/styles/{car}` (body `{"style":"jdm"}`, empty style deletes). The map is kept in memory, written atomically to `DATA_DIR/car-styles.json`, and pushed to every client as a `{"type":"styles","styles":{...}}` text frame on connect and on every change.
 - **Shutdown:** graceful on SIGTERM.
-- **Bandwidth:** 324 B × 60/s ≈ **20 KB/s per client**.
+- **Bandwidth:** 324 B × the game's frame rate: ≈ **20 KB/s per client** at 60 fps, ≈ **54 KB/s** at 170 fps (measured).
+- **Measured cost** (2026-09-13, real game at 170 packets/s, 2 clients): about 8% of one core, +0.5% per extra client; 8.5 MiB RAM, 11.4 MiB peak. No CPU throttling or OOM events under the compose limits. The Cloudflare Tunnel added about 11 ms p50 / 18 ms p95 versus the LAN.
 
 ### 3.2 Client (vanilla JS ES modules, no build step)
 
@@ -118,7 +119,7 @@ The gauges are drawn on a canvas every frame, so a framework adds nothing but a 
 - **Data Out IP Address** = the VM's LAN IP
 - **Data Out IP Port** = 5300
 
-The game sends about 60 packets per second and can send to **only one destination**.
+The game sends **one packet per rendered frame** (measured 170 packets/s on a 170 Hz monitor; 60/s at 60 fps) and can send to **only one destination**. Nothing on the client may assume a fixed packet rate.
 
 The packet is **324 bytes, little-endian**:
 
@@ -411,7 +412,10 @@ export default {
 | **Suspension trace** (wide canvas) | normalized travel per wheel |
 | **Position trail** (canvas) | top-down X/Z path, sampled at 10 Hz for about the last 4 minutes |
 
-- **History buffers:** ring buffers (`Float32Array`) holding 1200 samples, about 20 s at 60 Hz. They fill on every packet whichever screen is showing, so charts already have history when you switch to them.
+- **History buffers:** ring buffers (`Float32Array`) with a shared timestamp ring (`Float64Array`).
+  - Sampling is capped at 60 Hz (1260 samples ≈ 20 s) whatever the game's frame rate. Combined slip keeps its peak across skipped packets, so short spikes still show.
+  - Charts place points by timestamp, so "−20 s" is right at 30, 60 or 170+ fps. The G-G trail is the last 2 s by time.
+  - They fill on every packet whichever screen is showing, so charts already have history when you switch to them.
 - **Tire temperature colors** (approximate, adjust after real data): 100°F blue → 170°F green → 210°F yellow → 260°F+ red.
 
 ---

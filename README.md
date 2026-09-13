@@ -25,7 +25,7 @@ In **Settings → HUD and Gameplay**:
 | Data Out IP Address | the server's LAN IP |
 | Data Out IP Port | `5300` |
 
-The game sends about 60 packets per second to **one** destination. To feed another tool as well (SimHub, a motion rig), set `FORWARD_ADDR` (below).
+The game sends one packet per rendered frame (about 170 per second on a 170 Hz monitor) to **one** destination. To feed another tool as well (SimHub, a motion rig), set `FORWARD_ADDR` (below).
 
 ## Configuration
 
@@ -82,7 +82,7 @@ python3 tools/fake_forza.py --host 127.0.0.1 --port 5300
 | Flag | Default | Purpose |
 |---|---|---|
 | `--host`, `--port` | `127.0.0.1`, `5300` | Where to send |
-| `--hz` | `60` | Packet rate |
+| `--hz` | `60` | Packet rate; the game sends one per frame, so try `170` to match a high-refresh monitor |
 | `--cars 3000,1234` | `3000` | Rotate CarOrdinal every lap (tests per-car style memory) |
 | `--format` | `fh5` | `fh5` (324 B), `fm2023` (331 B), `fm7dash` (311 B), `fm7sled` (232 B), `bogus` (300 B, tests the banner) |
 | `--pause-every N` | off | Send IsRaceOn = 0 for 5 s every N laps |

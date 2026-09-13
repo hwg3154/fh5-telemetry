@@ -184,7 +184,7 @@ const PANELS = [
     wide: true,
     chart: {
       legend: [['Throttle', 'var(--throttle)'], ['Brake', 'var(--brake)'], ['Steering (centred)', 'var(--steer)']],
-      draw: (cv, c) => drawLines(cv, [
+      draw: (cv, c) => drawLines(cv, c.hist.time, [
         { ring: c.hist.throttle, color: '#34c759', min: 0, max: 1 },
         { ring: c.hist.brake, color: '#ff453a', min: 0, max: 1 },
         { ring: c.hist.steer, color: '#3d8bff', min: -1, max: 1 },
@@ -201,7 +201,7 @@ const PANELS = [
         let top = 30;
         for (let i = 0; i < r.len; i++) top = Math.max(top, r.at(i));
         top = Math.ceil((top * 1.1) / 10) * 10;
-        drawLines(cv, [
+        drawLines(cv, c.hist.time, [
           { ring: r, color: '#e9eaee', min: 0, max: top },
           { ring: c.hist.rpmFrac, color: '#ff6a3d', min: 0, max: 1 },
         ], { topLabel: fx(U.speed(top, c.m), 0), bottomLabel: '0' });
@@ -213,7 +213,7 @@ const PANELS = [
     wide: true,
     chart: {
       legend: WHEELS.map((w, i) => [w, WHEEL_COLORS[i]]),
-      draw: (cv, c) => drawLines(cv, c.hist.slip.map((ring, i) => ({ ring, color: WHEEL_COLORS[i], min: 0, max: 3 })), {
+      draw: (cv, c) => drawLines(cv, c.hist.time, c.hist.slip.map((ring, i) => ({ ring, color: WHEEL_COLORS[i], min: 0, max: 3 })), {
         guides: [{ value: 1, label: '1.0', color: '#ff453a' }],
         topLabel: '3',
         bottomLabel: '0',
@@ -225,7 +225,7 @@ const PANELS = [
     wide: true,
     chart: {
       legend: WHEELS.map((w, i) => [w, WHEEL_COLORS[i]]),
-      draw: (cv, c) => drawLines(cv, c.hist.susp.map((ring, i) => ({ ring, color: WHEEL_COLORS[i], min: 0, max: 1 })), {
+      draw: (cv, c) => drawLines(cv, c.hist.time, c.hist.susp.map((ring, i) => ({ ring, color: WHEEL_COLORS[i], min: 0, max: 1 })), {
         topLabel: '1',
         bottomLabel: '0',
       }),
