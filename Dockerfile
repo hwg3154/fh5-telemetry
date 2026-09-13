@@ -1,11 +1,16 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.27.1-alpine AS build
+# The build stage runs on the builder's own platform and cross-compiles, so
+# multi-arch images (amd64 + arm64) build quickly without emulation.
+FROM --platform=$BUILDPLATFORM golang:1.27.1-alpine AS build
+ARG TARGETOS TARGETARCH
+ARG VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/fh5-telemetry . \
+    CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w -X main.version=$VERSION" -o /out/fh5-telemetry . \
     && mkdir -p /out/data
 
 FROM scratch

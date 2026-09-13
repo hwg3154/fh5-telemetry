@@ -1,4 +1,6 @@
 .git
+.github/
+deploy/
 .gitignore
 .env
 data/

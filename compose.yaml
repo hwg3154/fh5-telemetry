@@ -10,6 +10,7 @@ services:
     environment:
       # Optional: re-send raw packets to other listeners, e.g. "192.168.1.20:5301,simhub.lan:5300"
       FORWARD_ADDR: ${FORWARD_ADDR:-}
+      UDP_PUBLIC_PORT: ${UDP_PORT:-5300} # port named in the "waiting for data" banner
     volumes:
       - fh5-data:/data               # car-styles.json (per-car dash style, shared by all devices)
     read_only: true

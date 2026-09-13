@@ -1,0 +1,44 @@
+# FH5 Telemetry: runs the prebuilt image from GitHub Container Registry.
+#
+#   mkdir fh5-telemetry && cd fh5-telemetry
+#   curl -fsSLO https://raw.githubusercontent.com/hwg3154/fh5-telemetry/main/deploy/compose.yaml
+#   docker compose up -d
+#
+# Open http://<this machine>:8080, then in Forza Horizon 5 set
+# Settings → HUD and Gameplay → Data Out = On, IP = this machine's LAN IP, port = 5300.
+#
+# Update:  docker compose pull && docker compose up -d
+#
+# The web UI has no login. Keep it on your LAN, or put it behind something that
+# adds one (Cloudflare Access, Tailscale, a VPN). Never port-forward it openly.
+#
+# Optional settings go in a .env file next to this file:
+#   FH5_TAG=1.0.0                    pin a release (default: latest release)
+#   HTTP_PORT=8080                   host port for the web UI
+#   UDP_PORT=5300                    host port for Forza Data Out
+#   FORWARD_ADDR=192.168.1.20:5301   also send raw packets to SimHub, a motion rig, etc.
+
+services:
+  fh5-telemetry:
+    image: ghcr.io/hwg3154/fh5-telemetry:${FH5_TAG:-latest}
+    container_name: fh5-telemetry
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+      - "${UDP_PORT:-5300}:5300/udp"
+    environment:
+      FORWARD_ADDR: ${FORWARD_ADDR:-}
+      UDP_PUBLIC_PORT: ${UDP_PORT:-5300} # port named in the "waiting for data" banner
+    volumes:
+      - fh5-data:/data # car-styles.json: the dash style saved for each car
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 64m
+    cpus: 0.5
+    logging:
+      driver: json-file
+      options: { max-size: "1m", max-file: "2" }
+
+volumes:
+  fh5-data:

@@ -7,13 +7,34 @@ A lightweight self-hosted web app for **Forza Horizon 5 "Data Out"** telemetry:
 
 A single Go binary receives the UDP packets and relays them unchanged to browsers over a WebSocket. The client is plain ES modules with no build step. The image is about 11 MB and uses about 10 MB of RAM. See [DESIGN.md](DESIGN.md) for the full design.
 
-## Quick start
+## Install
+
+A prebuilt image for **amd64 and arm64** (Raspberry Pi 4/5, most NAS boxes) is published to GitHub Container Registry. On the machine that will run it (Docker with Compose):
 
 ```bash
-docker compose up -d --build
+mkdir fh5-telemetry && cd fh5-telemetry
+curl -fsSLO https://raw.githubusercontent.com/hwg3154/fh5-telemetry/main/deploy/compose.yaml
+docker compose up -d
 ```
 
-Open `http://<server>:1234`. The page stays up and shows a "No telemetry" banner until the game sends data.
+Open `http://<server>:8080`. The page shows a "No telemetry" banner until the game sends data. To update: `docker compose pull && docker compose up -d`.
+
+| Image tag | What it is |
+|---|---|
+| `latest` | The newest release (the default) |
+| `1.2.3`, `1.2` | A specific release. Pin one with `FH5_TAG=1.2.3` in a `.env` file |
+| `edge` | The newest commit on `main` |
+
+> **The web UI has no login.** Keep it on your LAN, or put it behind something that adds one (Cloudflare Access, Tailscale, a VPN). Don't port-forward it to the internet.
+
+### Build from source
+
+The `compose.yaml` in the repo root builds the image locally and serves the web UI on port 1234:
+
+```bash
+git clone https://github.com/hwg3154/fh5-telemetry && cd fh5-telemetry
+docker compose up -d --build
+```
 
 ## Forza Horizon 5 settings
 
@@ -33,7 +54,8 @@ Compose variables (put them in a `.env` next to `compose.yaml` or export them):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `HTTP_PORT` | `1234` | Host port for the web UI |
+| `FH5_TAG` | `latest` | Image tag to run (`deploy/compose.yaml` only) |
+| `HTTP_PORT` | `8080` (`1234` when building from source) | Host port for the web UI |
 | `UDP_PORT` | `5300` | Host port for Forza Data Out |
 | `FORWARD_ADDR` | *(empty)* | Comma-separated `host:port` list to re-send every raw packet to, e.g. `192.168.1.20:5301`. Hostnames are resolved at startup. |
 
@@ -45,6 +67,7 @@ Inside the container (or when running the binary directly):
 | `UDP_ADDR` | `:5300` | UDP listen address |
 | `DATA_DIR` | `data` (`/data` in the image) | Where `car-styles.json` is stored |
 | `FORWARD_ADDR` | *(empty)* | As above |
+| `UDP_PUBLIC_PORT` | the `UDP_ADDR` port | UDP port named in the "waiting for data" banner. The compose files set it to `UDP_PORT`, because the container can't see the host's port mapping. |
 
 The container runs read-only, as `nobody`, with all capabilities dropped, a 64 MB memory limit and half a CPU. The only writable path is the `fh5-data` volume, which holds the per-car style map.
 
@@ -57,11 +80,11 @@ The container runs read-only, as `nobody`, with all capabilities dropped, a 64 M
 
 ## Cloudflare Tunnel and Access
 
-- Point the tunnel's public hostname at `http://127.0.0.1:1234` (cloudflared on the host network) or `http://<host>:1234`. WebSockets work through tunnels without extra settings.
+- Point the tunnel's public hostname at `http://127.0.0.1:<HTTP_PORT>` (cloudflared on the host network) or `http://<host>:<HTTP_PORT>`. WebSockets work through tunnels without extra settings.
 - The app has **no login of its own**. Put a **Cloudflare Access** policy on the hostname. The WebSocket and API are same-origin, so the Access cookie covers them.
 - HTTPS through the tunnel is what enables Screen Wake Lock on the iPad.
 - **Add to Home Screen** on the iPad for a full-screen app. Home Screen apps have their own cookie jar, so you may need to log in to Access again inside it. If that's annoying, use a normal Safari tab.
-- The tunnel adds a round trip to Cloudflare's edge. If the needles feel laggy, compare against the LAN URL (`http://<server>:1234`). It has no HTTPS, so there's no wake lock: set Auto-Lock to Never instead.
+- The tunnel adds a round trip to Cloudflare's edge. If the needles feel laggy, compare against the LAN URL (`http://<server>:<HTTP_PORT>`). It has no HTTPS, so there's no wake lock: set Auto-Lock to Never instead.
 
 ## Using it
 
@@ -111,6 +134,23 @@ The web UI is then on `http://localhost:8080`. Web files are embedded at build t
 | `GET /api/styles` | CarOrdinal → style map |
 | `PUT /api/styles/{car}` | Body `{"style":"jdm"}`; an empty style removes the entry |
 
+## Publishing images (maintainer)
+
+`.github/workflows/image.yml` checks the code (gofmt, go vet, JavaScript and Python syntax) and then builds amd64 + arm64 images:
+
+- A push to `main` publishes `ghcr.io/hwg3154/fh5-telemetry:edge`.
+- A tag `v1.2.3` publishes `:1.2.3`, `:1.2` and `:latest`.
+- Pull requests build but push nothing.
+
+First release:
+
+1. Push the workflow and wait for the **Image** run to go green.
+2. Tag a release. `deploy/compose.yaml` defaults to `:latest`, which only exists after the first tag:
+   ```bash
+   git tag v1.0.0 && git push origin v1.0.0
+   ```
+3. New ghcr.io packages are **private**. On GitHub, open your profile → **Packages** → **fh5-telemetry** → **Package settings** → **Change visibility** → **Public**. This can't be switched back to private.
+
 ## To verify against the real game
 
 Values the docs disagree on or that were never confirmed. The telemetry screen shows the raw values:
@@ -120,3 +160,7 @@ Values the docs disagree on or that were never confirmed. The telemetry screen s
 - Gear encoding for reverse and neutral (Engine panel shows the raw gear).
 - What bytes 232–243 contain (Car panel shows them as s32, f32 and hex).
 - IsRaceOn behaviour while paused and in menus.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

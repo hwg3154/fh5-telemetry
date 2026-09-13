@@ -32,6 +32,7 @@ It must look good on a laptop, an iPad, and an iPhone.
 | Telemetry screen | **Show as much data as possible.** Scrolling is fine. |
 | Clients | Several devices can connect at once, e.g. the iPad on the dash and a laptop on telemetry. |
 | Units | Imperial by default, with a toggle for metric. |
+| Distribution | Other players run **their own copy** from a prebuilt image on ghcr.io (amd64 + arm64), built by GitHub Actions. MIT licence. Hosting other players' telemetry on one server is out of scope. |
 
 ---
 
@@ -71,7 +72,8 @@ It must look good on a laptop, an iPad, and an iPhone.
 - **Health checks:** a `GET /healthz` endpoint, plus a `healthcheck` subcommand for Docker's `HEALTHCHECK`. The scratch image has no curl, so the binary checks itself.
 - **WebSocket library:** `github.com/coder/websocket`, with compression disabled.
   - Keep the default origin check. cloudflared keeps the original Host header, so the check passes through the tunnel.
-- **Config:** env vars `HTTP_ADDR` (default `:8080`), `UDP_ADDR` (default `:5300`), `DATA_DIR` (default `data`, `/data` in the image) and `FORWARD_ADDR` (optional).
+- **Config:** env vars `HTTP_ADDR` (default `:8080`), `UDP_ADDR` (default `:5300`), `DATA_DIR` (default `data`, `/data` in the image), `FORWARD_ADDR` (optional) and `UDP_PUBLIC_PORT` (optional: the UDP port the "waiting for data" banner names; compose sets it to the host port because the container can't see the mapping).
+- **Version:** set at build time (`-X main.version`), logged at startup. CI passes the release version, or `edge` for `main`.
 - **UDP forwarding:** if `FORWARD_ADDR` holds a comma-separated `host:port` list, every raw packet is re-sent there as well (for SimHub, a motion rig, etc.). Off by default; hostnames resolve once at startup.
 - **Per-car styles:** `GET /api/styles` and `PUT /api/styles/{car}` (body `{"style":"jdm"}`, empty style deletes). The map is kept in memory, written atomically to `DATA_DIR/car-styles.json`, and pushed to every client as a `{"type":"styles","styles":{...}}` text frame on connect and on every change.
 - **Shutdown:** graceful on SIGTERM.
@@ -456,10 +458,13 @@ fh5-telemetry/
 │           └── charts.js  # line charts, G-G, position trail
 ├── tools/
 │   └── fake_forza.py  # synthetic FH5 packet sender (stdlib only)
-├── Dockerfile
-├── compose.yaml
+├── Dockerfile                  # cross-compiles for amd64 and arm64
+├── compose.yaml                # builds from source (dev box, port 1234)
+├── deploy/compose.yaml         # pulls the prebuilt ghcr.io image (port 8080)
+├── .github/workflows/image.yml # checks, then builds and publishes images
 ├── .dockerignore
 ├── DESIGN.md
+├── LICENSE                     # MIT
 └── README.md
 ```
 

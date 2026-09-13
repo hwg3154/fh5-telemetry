@@ -26,6 +26,9 @@ import (
 //go:embed web
 var webFS embed.FS
 
+// version is set at build time with -ldflags "-X main.version=...".
+var version = "dev"
+
 func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -49,7 +52,13 @@ func main() {
 		log.Fatalf("FORWARD_ADDR: %v", err)
 	}
 	styles := loadStyles(getenv("DATA_DIR", "data"))
-	h := newHub(styles, portOf(udpAddr), fwd.count())
+	// The "waiting for data" banner names the port to point the game at. Behind
+	// a Docker port mapping that is the host port, which the container can't see.
+	udpPort := portOf(udpAddr)
+	if p, err := strconv.Atoi(os.Getenv("UDP_PUBLIC_PORT")); err == nil && p > 0 {
+		udpPort = p
+	}
+	h := newHub(styles, udpPort, fwd.count())
 
 	udp, err := listenUDP(udpAddr)
 	if err != nil {
@@ -80,7 +89,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("http listen %s: %v", httpAddr, err)
 	}
-	log.Printf("listening: http %s, udp %s", ln.Addr(), udp.LocalAddr())
+	log.Printf("fh5-telemetry %s listening: http %s, udp %s", version, ln.Addr(), udp.LocalAddr())
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("http: %v", err)
